@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 
-export function AddressSearch({ value, onChange, placeholder, mapboxToken, confirmed, restrictToUS }) {
+export function AddressSearch({ value, onChange, placeholder, mapboxToken, confirmed, restrictToUS = true }) {
   const [inputValue, setInputValue] = useState(value || '')
   const [suggestions, setSuggestions] = useState([])
   const [isOpen, setIsOpen] = useState(false)
@@ -43,7 +43,14 @@ export function AddressSearch({ value, onChange, placeholder, mapboxToken, confi
         if (restrictToUS) params.set('country', 'US')
         const res = await fetch(`${GEOCODE_URL}?${params.toString()}`)
         const data = await res.json()
-        const features = data.features || []
+        let features = data.features || []
+        if (restrictToUS && features.length > 0) {
+          features = features.filter((f) => {
+            const code = f.properties?.context?.country?.country_code ?? f.properties?.country_code
+            if (code == null) return true
+            return code === 'US' || code === 'USA'
+          })
+        }
         const seen = new Set()
         const unique = features.filter((f) => {
           const coords = f.geometry?.coordinates?.join(',')
