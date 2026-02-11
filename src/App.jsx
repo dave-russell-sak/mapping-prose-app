@@ -115,11 +115,31 @@ export default function App() {
   const handleCopy = async () => {
     if (!prose) return
     try {
-      await navigator.clipboard.writeText(prose)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(prose)
+      } else {
+        throw new Error('Clipboard not available')
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      setError(null)
     } catch {
-      setError('Could not copy to clipboard.')
+      const textArea = document.createElement('textarea')
+      textArea.value = prose
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      textArea.setAttribute('readonly', '')
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        setError(null)
+      } catch {
+        setError('Could not copy to clipboard.')
+      }
+      document.body.removeChild(textArea)
     }
   }
 
