@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 
-export function AddressSearch({ value, onChange, placeholder, mapboxToken, confirmed }) {
+export function AddressSearch({ value, onChange, placeholder, mapboxToken, confirmed, restrictToUS }) {
   const [inputValue, setInputValue] = useState(value || '')
   const [suggestions, setSuggestions] = useState([])
   const [isOpen, setIsOpen] = useState(false)
@@ -34,9 +34,14 @@ export function AddressSearch({ value, onChange, placeholder, mapboxToken, confi
       if (!mapboxToken) return
       setIsLoading(true)
       try {
-        const res = await fetch(
-          `${GEOCODE_URL}?q=${encodeURIComponent(inputValue)}&access_token=${mapboxToken}&limit=5&autocomplete=true`
-        )
+        const params = new URLSearchParams({
+          q: inputValue,
+          access_token: mapboxToken,
+          limit: '5',
+          autocomplete: 'true',
+        })
+        if (restrictToUS) params.set('country', 'US')
+        const res = await fetch(`${GEOCODE_URL}?${params.toString()}`)
         const data = await res.json()
         const features = data.features || []
         const seen = new Set()
@@ -71,7 +76,7 @@ export function AddressSearch({ value, onChange, placeholder, mapboxToken, confi
     }, 300)
 
     return () => clearTimeout(timer)
-  }, [inputValue, mapboxToken, confirmed])
+  }, [inputValue, mapboxToken, confirmed, restrictToUS])
 
   const selectSuggestion = (suggestion) => {
     const displayText = suggestion.address || suggestion.name

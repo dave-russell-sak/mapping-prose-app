@@ -7,10 +7,15 @@ const DIRECTIONS_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving'
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
-async function geocodeAddress(address, token) {
-  const res = await fetch(
-    `${GEOCODE_URL}?q=${encodeURIComponent(address)}&access_token=${token}&limit=1&autocomplete=false`
-  )
+async function geocodeAddress(address, token, countryCode = 'US') {
+  const params = new URLSearchParams({
+    q: address,
+    access_token: token,
+    limit: '1',
+    autocomplete: 'false',
+  })
+  if (countryCode) params.set('country', countryCode)
+  const res = await fetch(`${GEOCODE_URL}?${params.toString()}`)
   const data = await res.json()
   const feature = data.features?.[0]
   if (!feature?.geometry?.coordinates) return null
@@ -51,13 +56,14 @@ export default function App() {
   const [origin, setOrigin] = useState({ label: DEFAULT_ORIGIN })
   const [destination, setDestination] = useState(null)
   const [originGeocoding, setOriginGeocoding] = useState(true)
+  const [includeInternational, setIncludeInternational] = useState(false)
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
       setOriginGeocoding(false)
       return
     }
-    geocodeAddress(DEFAULT_ORIGIN, MAPBOX_TOKEN).then((result) => {
+    geocodeAddress(DEFAULT_ORIGIN, MAPBOX_TOKEN, 'US').then((result) => {
       if (result) setOrigin(result)
       setOriginGeocoding(false)
     })
@@ -158,6 +164,18 @@ export default function App() {
         </header>
 
         <div className="space-y-6">
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <input
+              type="checkbox"
+              checked={includeInternational}
+              onChange={(e) => setIncludeInternational(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+            />
+            <span className="text-sm text-slate-700">
+              Travel is outside the contiguous US (show international addresses)
+            </span>
+          </label>
+
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Starting Point
@@ -168,6 +186,7 @@ export default function App() {
               placeholder="Enter an address..."
               mapboxToken={MAPBOX_TOKEN}
               confirmed={!!origin?.coordinates || originGeocoding}
+              restrictToUS={!includeInternational}
             />
           </div>
 
@@ -181,6 +200,7 @@ export default function App() {
               placeholder="Enter an address..."
               mapboxToken={MAPBOX_TOKEN}
               confirmed={!!destination?.coordinates}
+              restrictToUS={!includeInternational}
             />
           </div>
 
