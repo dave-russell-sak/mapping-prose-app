@@ -175,9 +175,9 @@ export default function App() {
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`
       : ''
   const appleMapsUrl = effectiveCoords
-    ? `https://maps.apple.com/?daddr=${effectiveCoords[1]},${effectiveCoords[0]}`
+    ? `maps://?daddr=${effectiveCoords[1]},${effectiveCoords[0]}`
     : destinationAddress
-      ? `https://maps.apple.com/?daddr=${encodeURIComponent(destinationAddress)}`
+      ? `maps://?daddr=${encodeURIComponent(destinationAddress)}`
       : ''
 
   const getCopyText = () => {
