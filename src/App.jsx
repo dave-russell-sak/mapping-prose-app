@@ -1,11 +1,38 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Copy, Check, MapPin, Loader2 } from 'lucide-react'
+import { Copy, Check, MapPin, Loader2, RotateCcw } from 'lucide-react'
 import { AddressSearch } from './components/AddressSearch'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN
 const DIRECTIONS_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving'
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
+const SEARCH_BOX_FORWARD_URL = 'https://api.mapbox.com/search/searchbox/v1/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
+
+async function findParkingNear(coordinates, token) {
+  const [lon, lat] = coordinates
+  const params = new URLSearchParams({
+    q: 'parking',
+    access_token: token,
+    proximity: `${lon},${lat}`,
+    limit: '5',
+    types: 'poi',
+    country: 'US',
+  })
+  const res = await fetch(`${SEARCH_BOX_FORWARD_URL}?${params.toString()}`)
+  const data = await res.json()
+  const features = data.features || []
+  const parking = features.find(
+    (f) =>
+      f.properties?.poi_category_ids?.some((c) =>
+        ['parking', 'parking_garage', 'parking_lot'].includes(String(c).toLowerCase())
+      ) ||
+      /parking|garage|lot/i.test(f.properties?.name || '')
+  ) || features[0]
+  if (!parking?.geometry?.coordinates) return null
+  const props = parking.properties || {}
+  const label = props.full_address || [props.name, props.place_formatted].filter(Boolean).join(', ') || 'Parking'
+  return { label, coordinates: parking.geometry.coordinates }
+}
 
 async function geocodeAddress(address, token, countryCode = 'US') {
   const params = new URLSearchParams({
@@ -57,6 +84,8 @@ export default function App() {
   const [destination, setDestination] = useState(null)
   const [originGeocoding, setOriginGeocoding] = useState(true)
   const [includeInternational, setIncludeInternational] = useState(false)
+  const [useSelfParking, setUseSelfParking] = useState(false)
+  const [effectiveDestination, setEffectiveDestination] = useState(null)
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
@@ -93,9 +122,17 @@ export default function App() {
     setIsGenerating(true)
     setError(null)
     setProse('')
+    setEffectiveDestination(null)
 
     try {
-      const directions = await fetchRoute(origin.coordinates, destination.coordinates)
+      let routingDestination = destination
+      if (useSelfParking && destination?.coordinates && MAPBOX_TOKEN) {
+        const parkingResult = await findParkingNear(destination.coordinates, MAPBOX_TOKEN)
+        if (parkingResult) routingDestination = parkingResult
+      }
+      setEffectiveDestination(routingDestination)
+
+      const directions = await fetchRoute(origin.coordinates, routingDestination.coordinates)
       const maneuvers = extractManeuvers(directions)
 
       if (maneuvers.length === 0) {
@@ -118,11 +155,30 @@ export default function App() {
     }
   }
 
+  const destinationAddress = (effectiveDestination || destination)?.label || ''
+  const googleMapsUrl = destinationAddress
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`
+    : ''
+  const appleMapsUrl = destinationAddress
+    ? `https://maps.apple.com/?daddr=${encodeURIComponent(destinationAddress)}`
+    : ''
+
+  const getCopyText = () => {
+    const lines = [prose]
+    if (destinationAddress) {
+      lines.push('')
+      lines.push(`[Open in Google Maps] ${googleMapsUrl}`)
+      lines.push(`[Open in Apple Maps] ${appleMapsUrl}`)
+    }
+    return lines.join('\n')
+  }
+
   const handleCopy = async () => {
     if (!prose) return
+    const text = getCopyText()
     try {
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(prose)
+        await navigator.clipboard.writeText(text)
       } else {
         throw new Error('Clipboard not available')
       }
@@ -131,7 +187,7 @@ export default function App() {
       setError(null)
     } catch {
       const textArea = document.createElement('textarea')
-      textArea.value = prose
+      textArea.value = text
       textArea.style.position = 'fixed'
       textArea.style.left = '-9999px'
       textArea.setAttribute('readonly', '')
@@ -147,6 +203,19 @@ export default function App() {
       }
       document.body.removeChild(textArea)
     }
+  }
+
+  const handleReset = () => {
+    setDestination(null)
+    setEffectiveDestination(null)
+    setProse('')
+    setError(null)
+    setOrigin({ label: DEFAULT_ORIGIN })
+    setOriginGeocoding(true)
+    geocodeAddress(DEFAULT_ORIGIN, MAPBOX_TOKEN, 'US').then((result) => {
+      if (result) setOrigin(result)
+      setOriginGeocoding(false)
+    })
   }
 
   const canGenerate = origin?.coordinates && destination?.coordinates && !isGenerating
@@ -190,6 +259,18 @@ export default function App() {
             />
           </div>
 
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <input
+              type="checkbox"
+              checked={useSelfParking}
+              onChange={(e) => setUseSelfParking(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+            />
+            <span className="text-sm text-slate-700">
+              Add self-parking (find parking near destination to bypass lobby/valet)
+            </span>
+          </label>
+
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Destination
@@ -232,25 +313,74 @@ export default function App() {
             <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur-sm">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-800">Your Narrative</h2>
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                  title="Copy to clipboard"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4 text-emerald-600" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                    title="Copy to clipboard"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 text-emerald-600" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                    title="Reset and generate another"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </button>
+                </div>
               </div>
+              {useSelfParking && effectiveDestination && effectiveDestination.label !== destination?.label && (
+                <p className="mb-3 text-sm text-slate-600">
+                  Directions to self-parking: <span className="font-medium">{effectiveDestination.label}</span>
+                </p>
+              )}
               <p className="leading-relaxed text-slate-700 whitespace-pre-wrap">{prose}</p>
+              {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
+                  {googleMapsUrl && (
+                    <span className="inline-flex items-center text-slate-700">
+                      <span className="text-slate-500">[</span>
+                      <a
+                        href={googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                      >
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        Open in Google Maps
+                      </a>
+                      <span className="text-slate-500">]</span>
+                    </span>
+                  )}
+                  {appleMapsUrl && (
+                    <span className="inline-flex items-center text-slate-700">
+                      <span className="text-slate-500">[</span>
+                      <a
+                        href={appleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                      >
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        Open in Apple Maps
+                      </a>
+                      <span className="text-slate-500">]</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
