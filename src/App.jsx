@@ -5,33 +5,43 @@ import { AddressSearch } from './components/AddressSearch'
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN
 const DIRECTIONS_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving'
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
-const SEARCH_BOX_FORWARD_URL = 'https://api.mapbox.com/search/searchbox/v1/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
-async function findParkingNear(coordinates, token) {
-  const [lon, lat] = coordinates
-  const params = new URLSearchParams({
-    q: 'parking',
-    access_token: token,
-    proximity: `${lon},${lat}`,
-    limit: '5',
-    types: 'poi',
-    country: 'US',
-  })
-  const res = await fetch(`${SEARCH_BOX_FORWARD_URL}?${params.toString()}`)
-  const data = await res.json()
-  const features = data.features || []
-  const parking = features.find(
-    (f) =>
-      f.properties?.poi_category_ids?.some((c) =>
-        ['parking', 'parking_garage', 'parking_lot'].includes(String(c).toLowerCase())
-      ) ||
-      /parking|garage|lot/i.test(f.properties?.name || '')
-  ) || features[0]
-  if (!parking?.geometry?.coordinates) return null
-  const props = parking.properties || {}
-  const label = props.full_address || [props.name, props.place_formatted].filter(Boolean).join(', ') || 'Parking'
-  return { label, coordinates: parking.geometry.coordinates }
+function parseCoordsFromInput(input) {
+  const s = input.trim()
+  if (!s) return null
+
+  const googleMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/) ||
+    s.match(/\/dir\/\/\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/) ||
+    s.match(/[?&](?:q|query)=(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/)
+  if (googleMatch) {
+    const a = parseFloat(googleMatch[1])
+    const b = parseFloat(googleMatch[2])
+    const lat = Math.abs(a) <= 90 ? a : b
+    const lng = Math.abs(b) <= 180 ? b : a
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return [lng, lat]
+  }
+
+  const twoNumbers = s.match(/^(-?\d+\.?\d*)\s*[,]\s*(-?\d+\.?\d*)\s*$/)
+  if (twoNumbers) {
+    const a = parseFloat(twoNumbers[1])
+    const b = parseFloat(twoNumbers[2])
+    const lat = Math.abs(a) <= 90 ? a : b
+    const lng = Math.abs(b) <= 180 ? b : a
+    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return [lng, lat]
+  }
+
+  return null
+}
+
+async function resolveSelfParkingInput(input, token) {
+  if (!input?.trim()) return null
+  const coords = parseCoordsFromInput(input)
+  if (coords) {
+    return { label: `Self-parking (${coords[1].toFixed(5)}, ${coords[0].toFixed(5)})`, coordinates: coords }
+  }
+  const result = await geocodeAddress(input.trim(), token, 'US')
+  return result ? { ...result, label: result.label || 'Self-parking' } : null
 }
 
 async function geocodeAddress(address, token, countryCode = 'US') {
@@ -84,7 +94,7 @@ export default function App() {
   const [destination, setDestination] = useState(null)
   const [originGeocoding, setOriginGeocoding] = useState(true)
   const [includeInternational, setIncludeInternational] = useState(false)
-  const [useSelfParking, setUseSelfParking] = useState(false)
+  const [selfParkingOverride, setSelfParkingOverride] = useState('')
   const [effectiveDestination, setEffectiveDestination] = useState(null)
   const copyBlockRef = useRef(null)
 
@@ -127,9 +137,9 @@ export default function App() {
 
     try {
       let routingDestination = destination
-      if (useSelfParking && destination?.coordinates && MAPBOX_TOKEN) {
-        const parkingResult = await findParkingNear(destination.coordinates, MAPBOX_TOKEN)
-        if (parkingResult) routingDestination = parkingResult
+      if (selfParkingOverride.trim() && MAPBOX_TOKEN) {
+        const resolved = await resolveSelfParkingInput(selfParkingOverride.trim(), MAPBOX_TOKEN)
+        if (resolved) routingDestination = resolved
       }
       setEffectiveDestination(routingDestination)
 
@@ -156,13 +166,19 @@ export default function App() {
     }
   }
 
-  const destinationAddress = (effectiveDestination || destination)?.label || ''
-  const googleMapsUrl = destinationAddress
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`
-    : ''
-  const appleMapsUrl = destinationAddress
-    ? `https://maps.apple.com/?daddr=${encodeURIComponent(destinationAddress)}`
-    : ''
+  const effective = effectiveDestination || destination
+  const effectiveCoords = effective?.coordinates
+  const destinationAddress = effective?.label || ''
+  const googleMapsUrl = effectiveCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${effectiveCoords[1]},${effectiveCoords[0]}`
+    : destinationAddress
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`
+      : ''
+  const appleMapsUrl = effectiveCoords
+    ? `https://maps.apple.com/?daddr=${effectiveCoords[1]},${effectiveCoords[0]}`
+    : destinationAddress
+      ? `https://maps.apple.com/?daddr=${encodeURIComponent(destinationAddress)}`
+      : ''
 
   const getCopyText = () => {
     const lines = [prose]
@@ -233,6 +249,7 @@ export default function App() {
 
   const handleReset = () => {
     setDestination(null)
+    setSelfParkingOverride('')
     setEffectiveDestination(null)
     setProse('')
     setError(null)
@@ -285,18 +302,6 @@ export default function App() {
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
-            <input
-              type="checkbox"
-              checked={useSelfParking}
-              onChange={(e) => setUseSelfParking(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
-            />
-            <span className="text-sm text-slate-700">
-              Add self-parking (find parking near destination to bypass lobby/valet)
-            </span>
-          </label>
-
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
               Destination
@@ -309,6 +314,22 @@ export default function App() {
               confirmed={!!destination?.coordinates}
               restrictToUS={!includeInternational}
             />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Self-parking (optional)
+            </label>
+            <input
+              type="text"
+              value={selfParkingOverride}
+              onChange={(e) => setSelfParkingOverride(e.target.value)}
+              placeholder="Paste a Google Maps link, or enter coordinates (lat,lng) or address"
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Routes and map links will go here instead of the destination above. Leave blank to use the destination.
+            </p>
           </div>
 
           <button
@@ -368,7 +389,7 @@ export default function App() {
                 </div>
               </div>
               <div ref={copyBlockRef}>
-                {useSelfParking && effectiveDestination && effectiveDestination.label !== destination?.label && (
+                {selfParkingOverride.trim() && effectiveDestination && effectiveDestination !== destination && (
                   <p className="mb-3 text-sm text-slate-600">
                     Directions to self-parking:{' '}
                     <span className="font-medium">{effectiveDestination.label}</span>
