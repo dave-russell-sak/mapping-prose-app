@@ -184,8 +184,8 @@ export default function App() {
     const lines = [prose]
     if (destinationAddress) {
       lines.push('')
-      lines.push(`[Open in Google Maps] ${googleMapsUrl}`)
-      lines.push(`[Open in Apple Maps] ${appleMapsUrl}`)
+      lines.push(`[📍 Open in Google Maps]     ${googleMapsUrl}`)
+      lines.push(`[📍 Open in Apple Maps]     ${appleMapsUrl}`)
     }
     return lines.join('\n')
   }
@@ -407,12 +407,13 @@ export default function App() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
                         >
-                          <MapPin className="h-4 w-4 shrink-0" />
+                          <span aria-hidden="true">📍</span>
                           Open in Google Maps
                         </a>
                         <span className="text-slate-500">]</span>
                       </span>
                     )}
+                    {'     '}
                     {appleMapsUrl && (
                       <span className="inline-flex items-center text-slate-700">
                         <span className="text-slate-500">[</span>
@@ -422,7 +423,7 @@ export default function App() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
                         >
-                          <MapPin className="h-4 w-4 shrink-0" />
+                          <span aria-hidden="true">📍</span>
                           Open in Apple Maps
                         </a>
                         <span className="text-slate-500">]</span>
