@@ -7,11 +7,7 @@ const DIRECTIONS_URL = 'https://api.mapbox.com/directions/v5/mapbox/driving'
 const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
-const RED_PIN_SVG =
-  'data:image/svg+xml,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36" width="14" height="21"><path fill="#dc2626" d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0zm0 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>'
-  )
+const MAP_LINK_SPACER = '\u00A0'.repeat(8)
 
 function parseCoordsFromInput(input) {
   const s = input.trim()
@@ -191,6 +187,7 @@ export default function App() {
     if (destinationAddress) {
       lines.push('')
       lines.push(`[📍 Open in Google Maps]     ${googleMapsUrl}`)
+      lines.push('')
       lines.push(`[📍 Open in Apple Maps]     ${appleMapsUrl}`)
     }
     return lines.join('\n')
@@ -394,7 +391,10 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div ref={copyBlockRef}>
+              <div
+                ref={copyBlockRef}
+                style={{ fontFamily: 'Arial', fontSize: '10pt' }}
+              >
                 {selfParkingOverride.trim() && effectiveDestination && effectiveDestination !== destination && (
                   <p className="mb-3 text-sm text-slate-600">
                     Directions to self-parking:{' '}
@@ -413,13 +413,13 @@ export default function App() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
                         >
-                          <img src={RED_PIN_SVG} alt="" role="presentation" className="inline-block h-4 w-4 shrink-0" />
+                          <span aria-hidden="true">📍</span>
                           Open in Google Maps
                         </a>
                         <span className="text-slate-500">]</span>
                       </span>
                     )}
-                    {'     '}
+                    <span style={{ whiteSpace: 'pre' }}>{MAP_LINK_SPACER}</span>
                     {appleMapsUrl && (
                       <span className="inline-flex items-center text-slate-700">
                         <span className="text-slate-500">[</span>
@@ -429,7 +429,7 @@ export default function App() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
                         >
-                          <img src={RED_PIN_SVG} alt="" role="presentation" className="inline-block h-4 w-4 shrink-0" />
+                          <span aria-hidden="true">📍</span>
                           Open in Apple Maps
                         </a>
                         <span className="text-slate-500">]</span>
