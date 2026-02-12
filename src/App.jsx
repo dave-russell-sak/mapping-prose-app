@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Copy, Check, MapPin, Loader2, RotateCcw } from 'lucide-react'
 import { AddressSearch } from './components/AddressSearch'
 
@@ -86,6 +86,7 @@ export default function App() {
   const [includeInternational, setIncludeInternational] = useState(false)
   const [useSelfParking, setUseSelfParking] = useState(false)
   const [effectiveDestination, setEffectiveDestination] = useState(null)
+  const copyBlockRef = useRef(null)
 
   useEffect(() => {
     if (!MAPBOX_TOKEN) {
@@ -175,6 +176,31 @@ export default function App() {
 
   const handleCopy = async () => {
     if (!prose) return
+
+    // First try copying the rendered HTML block (for rich paste into Word, etc.)
+    const block = copyBlockRef.current
+    if (block && window.getSelection && document.createRange) {
+      const selection = window.getSelection()
+      const range = document.createRange()
+      selection.removeAllRanges()
+      range.selectNodeContents(block)
+      selection.addRange(range)
+      try {
+        const ok = document.execCommand('copy')
+        selection.removeAllRanges()
+        if (ok) {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 2000)
+          setError(null)
+          return
+        }
+      } catch {
+        selection.removeAllRanges()
+        // fall through to plain-text copy
+      }
+    }
+
+    // Fallback: plain-text copy of prose + URLs
     const text = getCopyText()
     try {
       if (navigator.clipboard?.writeText) {
@@ -341,46 +367,49 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              {useSelfParking && effectiveDestination && effectiveDestination.label !== destination?.label && (
-                <p className="mb-3 text-sm text-slate-600">
-                  Directions to self-parking: <span className="font-medium">{effectiveDestination.label}</span>
-                </p>
-              )}
-              <p className="leading-relaxed text-slate-700 whitespace-pre-wrap">{prose}</p>
-              {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
-                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
-                  {googleMapsUrl && (
-                    <span className="inline-flex items-center text-slate-700">
-                      <span className="text-slate-500">[</span>
-                      <a
-                        href={googleMapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
-                      >
-                        <MapPin className="h-4 w-4 shrink-0" />
-                        Open in Google Maps
-                      </a>
-                      <span className="text-slate-500">]</span>
-                    </span>
-                  )}
-                  {appleMapsUrl && (
-                    <span className="inline-flex items-center text-slate-700">
-                      <span className="text-slate-500">[</span>
-                      <a
-                        href={appleMapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
-                      >
-                        <MapPin className="h-4 w-4 shrink-0" />
-                        Open in Apple Maps
-                      </a>
-                      <span className="text-slate-500">]</span>
-                    </span>
-                  )}
-                </div>
-              )}
+              <div ref={copyBlockRef}>
+                {useSelfParking && effectiveDestination && effectiveDestination.label !== destination?.label && (
+                  <p className="mb-3 text-sm text-slate-600">
+                    Directions to self-parking:{' '}
+                    <span className="font-medium">{effectiveDestination.label}</span>
+                  </p>
+                )}
+                <p className="leading-relaxed text-slate-700 whitespace-pre-wrap">{prose}</p>
+                {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
+                    {googleMapsUrl && (
+                      <span className="inline-flex items-center text-slate-700">
+                        <span className="text-slate-500">[</span>
+                        <a
+                          href={googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                        >
+                          <MapPin className="h-4 w-4 shrink-0" />
+                          Open in Google Maps
+                        </a>
+                        <span className="text-slate-500">]</span>
+                      </span>
+                    )}
+                    {appleMapsUrl && (
+                      <span className="inline-flex items-center text-slate-700">
+                        <span className="text-slate-500">[</span>
+                        <a
+                          href={appleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                        >
+                          <MapPin className="h-4 w-4 shrink-0" />
+                          Open in Apple Maps
+                        </a>
+                        <span className="text-slate-500">]</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
