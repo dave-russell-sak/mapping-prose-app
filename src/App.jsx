@@ -9,6 +9,16 @@ const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
 const MAP_LINK_SPACER = '\u00A0'.repeat(8)
 
+function RedPinIcon({ className = 'h-4 w-4' }) {
+  return (
+    <span className={`inline-block shrink-0 text-red-600 ${className}`} aria-hidden>
+      <svg viewBox="0 0 24 36" fill="currentColor" className="w-full h-full">
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24s12-15 12-24C24 5.373 18.627 0 12 0zm0 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" />
+      </svg>
+    </span>
+  )
+}
+
 function parseCoordsFromInput(input) {
   const s = input.trim()
   if (!s) return null
@@ -114,6 +124,8 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [linksCopied, setLinksCopied] = useState(false)
+  const linksCopyBlockRef = useRef(null)
 
   const handleOriginChange = useCallback((value) => {
     setOrigin(value)
@@ -182,21 +194,66 @@ export default function App() {
       ? `maps://?daddr=${encodeURIComponent(destinationAddress)}`
       : ''
 
-  const getCopyText = () => {
-    const lines = [prose]
-    if (destinationAddress) {
-      lines.push('')
-      lines.push(`[📍 Open in Google Maps]     ${googleMapsUrl}`)
-      lines.push('')
-      lines.push(`[📍 Open in Apple Maps]     ${appleMapsUrl}`)
-    }
+  const getCopyText = () => prose || ''
+
+  const getLinksCopyText = () => {
+    const lines = []
+    if (googleMapsUrl) lines.push(`Open in Google Maps: ${googleMapsUrl}`)
+    if (appleMapsUrl) lines.push(`Open in Apple Maps: ${appleMapsUrl}`)
     return lines.join('\n')
+  }
+
+  const handleCopyLinks = async () => {
+    if (!googleMapsUrl && !appleMapsUrl) return
+    const block = linksCopyBlockRef.current
+    if (block && window.getSelection && document.createRange) {
+      const selection = window.getSelection()
+      const range = document.createRange()
+      selection.removeAllRanges()
+      range.selectNodeContents(block)
+      selection.addRange(range)
+      try {
+        const ok = document.execCommand('copy')
+        selection.removeAllRanges()
+        if (ok) {
+          setLinksCopied(true)
+          setTimeout(() => setLinksCopied(false), 2000)
+          return
+        }
+      } catch {
+        selection.removeAllRanges()
+      }
+    }
+    const text = getLinksCopyText()
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        throw new Error('Clipboard not available')
+      }
+      setLinksCopied(true)
+      setTimeout(() => setLinksCopied(false), 2000)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        setLinksCopied(true)
+        setTimeout(() => setLinksCopied(false), 2000)
+      } finally {
+        document.body.removeChild(textArea)
+      }
+    }
   }
 
   const handleCopy = async () => {
     if (!prose) return
 
-    // First try copying the rendered HTML block (for rich paste into Word, etc.)
+    // Copy only the narrative block (for paste-and-match-formatting in Word)
     const block = copyBlockRef.current
     if (block && window.getSelection && document.createRange) {
       const selection = window.getSelection()
@@ -219,7 +276,7 @@ export default function App() {
       }
     }
 
-    // Fallback: plain-text copy of prose + URLs
+    // Fallback: plain-text copy of narrative only
     const text = getCopyText()
     try {
       if (navigator.clipboard?.writeText) {
@@ -367,7 +424,7 @@ export default function App() {
                   <button
                     onClick={handleCopy}
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                    title="Copy to clipboard"
+                    title="Copy narrative to clipboard"
                   >
                     {copied ? (
                       <>
@@ -381,6 +438,25 @@ export default function App() {
                       </>
                     )}
                   </button>
+                  {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
+                    <button
+                      onClick={handleCopyLinks}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                      title="Copy map links to clipboard"
+                    >
+                      {linksCopied ? (
+                        <>
+                          <Check className="h-4 w-4 text-emerald-600" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />
+                          Copy links
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={handleReset}
                     className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
@@ -391,53 +467,81 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {selfParkingOverride.trim() && effectiveDestination && effectiveDestination !== destination && (
+                <p className="mb-3 text-sm text-slate-600">
+                  Directions to self-parking:{' '}
+                  <span className="font-medium">{effectiveDestination.label}</span>
+                </p>
+              )}
               <div
                 ref={copyBlockRef}
                 style={{ fontFamily: 'Arial', fontSize: '10pt' }}
               >
-                {selfParkingOverride.trim() && effectiveDestination && effectiveDestination !== destination && (
-                  <p className="mb-3 text-sm text-slate-600">
-                    Directions to self-parking:{' '}
-                    <span className="font-medium">{effectiveDestination.label}</span>
-                  </p>
-                )}
                 <p className="leading-relaxed text-slate-700 whitespace-pre-wrap">{prose}</p>
-                {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
-                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
-                    {googleMapsUrl && (
-                      <span className="inline-flex items-center text-slate-700">
-                        <span className="text-slate-500">[</span>
-                        <a
-                          href={googleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
-                        >
-                          <span aria-hidden="true">📍</span>
-                          Open in Google Maps
-                        </a>
-                        <span className="text-slate-500">]</span>
-                      </span>
-                    )}
-                    <span style={{ whiteSpace: 'pre' }}>{MAP_LINK_SPACER}</span>
-                    {appleMapsUrl && (
-                      <span className="inline-flex items-center text-slate-700">
-                        <span className="text-slate-500">[</span>
-                        <a
-                          href={appleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
-                        >
-                          <span aria-hidden="true">📍</span>
-                          Open in Apple Maps
-                        </a>
-                        <span className="text-slate-500">]</span>
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
+              {/* Hidden block used only for copying links (clean paste into Word) */}
+              {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
+                <div
+                  ref={linksCopyBlockRef}
+                  style={{ fontFamily: 'Arial', fontSize: '10pt' }}
+                  className="absolute left-[-9999px] w-[1px] h-[1px] overflow-hidden"
+                  aria-hidden
+                >
+                  {googleMapsUrl && (
+                    <p style={{ margin: '0 0 0.25em 0' }}>
+                      <RedPinIcon />
+                      {' '}
+                      <a href={googleMapsUrl}>Open in Google Maps</a>
+                      {' — '}
+                      {googleMapsUrl}
+                    </p>
+                  )}
+                  {appleMapsUrl && (
+                    <p style={{ margin: 0 }}>
+                      <RedPinIcon />
+                      {' '}
+                      <a href={appleMapsUrl}>Open in Apple Maps</a>
+                      {' — '}
+                      {appleMapsUrl}
+                    </p>
+                  )}
+                </div>
+              )}
+              {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
+                  {googleMapsUrl && (
+                    <span className="inline-flex items-center gap-1.5 text-slate-700">
+                      <span className="text-slate-500">[</span>
+                      <a
+                        href={googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                      >
+                        <RedPinIcon />
+                        Open in Google Maps
+                      </a>
+                      <span className="text-slate-500">]</span>
+                    </span>
+                  )}
+                  <span style={{ whiteSpace: 'pre' }}>{MAP_LINK_SPACER}</span>
+                  {appleMapsUrl && (
+                    <span className="inline-flex items-center gap-1.5 text-slate-700">
+                      <span className="text-slate-500">[</span>
+                      <a
+                        href={appleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-700 hover:underline"
+                      >
+                        <RedPinIcon />
+                        Open in Apple Maps
+                      </a>
+                      <span className="text-slate-500">]</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
