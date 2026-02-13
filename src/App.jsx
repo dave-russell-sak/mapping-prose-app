@@ -205,6 +205,37 @@ export default function App() {
 
   const handleCopyLinks = async () => {
     if (!googleMapsUrl && !appleMapsUrl) return
+    // Prefer Clipboard API with minimal HTML (no block wrapper) to avoid Word adding a text box
+    const pinSvg = '<span style="color:#dc2626;display:inline-block;vertical-align:middle;width:1em;height:1.5em;"><svg viewBox="0 0 24 36" fill="currentColor" style="width:100%;height:100%"><path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24s12-15 12-24C24 5.373 18.627 0 12 0zm0 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg></span>'
+    const line1 = googleMapsUrl
+      ? `${pinSvg} [<a href="${googleMapsUrl}" style="border:none;outline:none;">Open in Google Maps</a>] — ${googleMapsUrl}`
+      : ''
+    const line2 = appleMapsUrl
+      ? `${pinSvg} [<a href="${appleMapsUrl}" style="border:none;outline:none;">Open in Apple Maps</a>] — ${appleMapsUrl}`
+      : ''
+    const html = [
+      '<span style="font-family:Arial;font-size:10pt;margin:0;padding:0;border:none;">',
+      line1,
+      line1 && line2 ? '<br>' : '',
+      line2,
+      '</span>',
+    ].join('')
+    const text = getLinksCopyText()
+    if (navigator.clipboard?.write) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          }),
+        ])
+        setLinksCopied(true)
+        setTimeout(() => setLinksCopied(false), 2000)
+        return
+      } catch {
+        // fall through to execCommand path
+      }
+    }
     const block = linksCopyBlockRef.current
     if (block && window.getSelection && document.createRange) {
       const selection = window.getSelection()
@@ -224,7 +255,6 @@ export default function App() {
         selection.removeAllRanges()
       }
     }
-    const text = getLinksCopyText()
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text)
@@ -479,32 +509,46 @@ export default function App() {
               >
                 <p className="leading-relaxed text-slate-700 whitespace-pre-wrap">{prose}</p>
               </div>
-              {/* Hidden block used only for copying links (clean paste into Word) */}
+              {/* Hidden block used only for copying links — single line block to avoid Word text box */}
               {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
                 <div
                   ref={linksCopyBlockRef}
-                  style={{ fontFamily: 'Arial', fontSize: '10pt' }}
+                  style={{
+                    fontFamily: 'Arial',
+                    fontSize: '10pt',
+                    margin: 0,
+                    padding: 0,
+                    border: 'none',
+                    outline: 'none',
+                    boxShadow: 'none',
+                    background: 'none',
+                  }}
                   className="absolute left-[-9999px] w-[1px] h-[1px] overflow-hidden"
                   aria-hidden
                 >
-                  {googleMapsUrl && (
-                    <p style={{ margin: '0 0 0.25em 0' }}>
-                      <RedPinIcon />
-                      {' '}
-                      <a href={googleMapsUrl}>Open in Google Maps</a>
-                      {' — '}
-                      {googleMapsUrl}
-                    </p>
-                  )}
-                  {appleMapsUrl && (
-                    <p style={{ margin: 0 }}>
-                      <RedPinIcon />
-                      {' '}
-                      <a href={appleMapsUrl}>Open in Apple Maps</a>
-                      {' — '}
-                      {appleMapsUrl}
-                    </p>
-                  )}
+                  <p style={{ margin: 0, padding: 0, border: 'none', outline: 'none' }}>
+                    {googleMapsUrl && (
+                      <>
+                        <RedPinIcon />
+                        {' ['}
+                        <a href={googleMapsUrl} style={{ border: 'none', outline: 'none', textDecoration: 'underline' }}>Open in Google Maps</a>
+                        {']'}
+                        {' — '}
+                        {googleMapsUrl}
+                      </>
+                    )}
+                    {googleMapsUrl && appleMapsUrl && <br />}
+                    {appleMapsUrl && (
+                      <>
+                        <RedPinIcon />
+                        {' ['}
+                        <a href={appleMapsUrl} style={{ border: 'none', outline: 'none', textDecoration: 'underline' }}>Open in Apple Maps</a>
+                        {']'}
+                        {' — '}
+                        {appleMapsUrl}
+                      </>
+                    )}
+                  </p>
                 </div>
               )}
               {destinationAddress && (googleMapsUrl || appleMapsUrl) && (
