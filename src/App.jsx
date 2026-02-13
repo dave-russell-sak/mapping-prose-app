@@ -365,6 +365,9 @@ export default function App() {
           <p className="mt-2 text-slate-600">
             Turn-by-turn directions narrative
           </p>
+          <p className="mt-1 text-xs text-slate-400" title="Bump this after deploy to verify you're on the latest">
+            v{APP_VERSION}
+          </p>
         </header>
 
         <div className="space-y-6">
