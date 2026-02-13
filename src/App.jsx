@@ -8,6 +8,7 @@ const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
 const MAP_LINK_SPACER = '\u00A0'.repeat(8)
+const APP_VERSION = '1.3.0' // Bump after deploy to verify latest (e.g. in footer)
 
 function RedPinIcon({ className = 'h-4 w-4' }) {
   return (
@@ -207,11 +208,12 @@ export default function App() {
     if (!googleMapsUrl && !appleMapsUrl) return
     // Prefer Clipboard API with minimal HTML (no block wrapper) to avoid Word adding a text box
     const pinSvg = '<span style="color:#dc2626;display:inline-block;vertical-align:middle;width:1em;height:1.5em;"><svg viewBox="0 0 24 36" fill="currentColor" style="width:100%;height:100%"><path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24s12-15 12-24C24 5.373 18.627 0 12 0zm0 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg></span>'
+    // Paste = pin + [Open in Google Maps] only (no URL text), so Word gets just linkable text
     const line1 = googleMapsUrl
-      ? `${pinSvg} [<a href="${googleMapsUrl}" style="border:none;outline:none;">Open in Google Maps</a>] — ${googleMapsUrl}`
+      ? `${pinSvg} [<a href="${googleMapsUrl}" style="border:none;outline:none;">Open in Google Maps</a>]`
       : ''
     const line2 = appleMapsUrl
-      ? `${pinSvg} [<a href="${appleMapsUrl}" style="border:none;outline:none;">Open in Apple Maps</a>] — ${appleMapsUrl}`
+      ? `${pinSvg} [<a href="${appleMapsUrl}" style="border:none;outline:none;">Open in Apple Maps</a>]`
       : ''
     const html = [
       '<span style="font-family:Arial;font-size:10pt;margin:0;padding:0;border:none;">',
@@ -533,8 +535,6 @@ export default function App() {
                         {' ['}
                         <a href={googleMapsUrl} style={{ border: 'none', outline: 'none', textDecoration: 'underline' }}>Open in Google Maps</a>
                         {']'}
-                        {' — '}
-                        {googleMapsUrl}
                       </>
                     )}
                     {googleMapsUrl && appleMapsUrl && <br />}
@@ -544,8 +544,6 @@ export default function App() {
                         {' ['}
                         <a href={appleMapsUrl} style={{ border: 'none', outline: 'none', textDecoration: 'underline' }}>Open in Apple Maps</a>
                         {']'}
-                        {' — '}
-                        {appleMapsUrl}
                       </>
                     )}
                   </p>
@@ -591,7 +589,7 @@ export default function App() {
         </div>
 
         <p className="mt-12 text-center text-xs text-slate-400">
-          Powered by Mapbox & OpenAI
+          Powered by Mapbox & OpenAI · v{APP_VERSION}
         </p>
       </div>
     </div>
