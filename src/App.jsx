@@ -189,10 +189,11 @@ export default function App() {
     : destinationAddress
       ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationAddress)}`
       : ''
+  // Use https so the link is clickable on mobile (maps:// is often blocked in browsers)
   const appleMapsUrl = effectiveCoords
-    ? `maps://?daddr=${effectiveCoords[1]},${effectiveCoords[0]}`
+    ? `https://maps.apple.com/?daddr=${effectiveCoords[1]},${effectiveCoords[0]}`
     : destinationAddress
-      ? `maps://?daddr=${encodeURIComponent(destinationAddress)}`
+      ? `https://maps.apple.com/?daddr=${encodeURIComponent(destinationAddress)}`
       : ''
 
   const getCopyText = () => prose || ''
