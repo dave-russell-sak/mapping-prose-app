@@ -8,7 +8,7 @@ const GEOCODE_URL = 'https://api.mapbox.com/search/geocode/v6/forward'
 const DEFAULT_ORIGIN = '55 W. Church St., Orlando, FL 32801'
 
 const MAP_LINK_SPACER = '\u00A0'.repeat(8)
-const APP_VERSION = '1.3.0' // Bump after deploy to verify latest (e.g. in footer)
+const APP_VERSION = '1.3.1' // Bump after deploy to verify latest (e.g. in footer)
 
 function RedPinIcon({ className = 'h-4 w-4' }) {
   return (
